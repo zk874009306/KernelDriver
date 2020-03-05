@@ -1,0 +1,533 @@
+From 3be244a0c2fe0ccd415412901987dc78a5677d20 Mon Sep 17 00:00:00 2001
+From: zhangkang <zhangkang@datang.com>
+Date: Thu, 21 Nov 2019 15:26:32 +0800
+Subject: [PATCH] add mma8652fc Accelerometer driver code
+
+---
+ .cproject       |  28 ++++++-----
+ accel/fsl_mma.c | 153 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ accel/fsl_mma.h | 146 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ source/main.c   |  98 ++++++++++++++++++++++++++++++++++++
+ 4 files changed, 413 insertions(+), 12 deletions(-)
+ create mode 100644 accel/fsl_mma.c
+ create mode 100644 accel/fsl_mma.h
+
+diff --git a/.cproject b/.cproject
+index 044104c..ce1bd2b 100644
+--- a/.cproject
++++ b/.cproject
+@@ -64,6 +64,7 @@
+ 								<option id="com.crt.advproject.gcc.hdrlib.1830165961" name="Library headers" superClass="com.crt.advproject.gcc.hdrlib" useByScannerDiscovery="false" value="com.crt.advproject.gcc.hdrlib.newlib" valueType="enumerated"/>
+ 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.preprocessor.def.symbols.2138041784" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
+ 									<listOptionValue builtIn="false" value="ARM_MATH_CM4"/>
++									<listOptionValue builtIn="false" value="SDK_I2C_BASED_COMPONENT_USED=1"/>
+ 									<listOptionValue builtIn="false" value="WM8904_DEBUG_REGISTER=1"/>
+ 									<listOptionValue builtIn="false" value="CODEC_WM8904_ENABLE"/>
+ 									<listOptionValue builtIn="false" value="SDK_DEBUGCONSOLE=0"/>
+@@ -100,6 +101,7 @@
+ 								<option id="gnu.c.compiler.option.preprocessor.undef.symbol.2094280845" name="Undefined symbols (-U)" superClass="gnu.c.compiler.option.preprocessor.undef.symbol" useByScannerDiscovery="false"/>
+ 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.include.paths.179606179" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
+ 									<listOptionValue builtIn="false" value="../codec"/>
++									<listOptionValue builtIn="false" value="../accel"/>
+ 									<listOptionValue builtIn="false" value="../drivers/freertos"/>
+ 									<listOptionValue builtIn="false" value="../drivers"/>
+ 									<listOptionValue builtIn="false" value="../component/uart"/>
+@@ -385,6 +387,7 @@
+ 					<sourceEntries>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="CMSIS"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="CMSIS_driver"/>
++						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="accel"/>
+ 						<entry excluding="freertos/portable/heap_1.c|freertos/portable/heap_2.c|freertos/portable/heap_3.c|freertos/portable/heap_5.c" flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="amazon-freertos"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="board"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="codec"/>
+@@ -395,7 +398,7 @@
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="emwin"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="libs"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="littlefs"/>
+-						<entry excluding="src/netif/ppp/polarssl/arc4.c|src/netif/ppp/polarssl/des.c|src/netif/ppp/polarssl/md4.c|src/netif/ppp/polarssl/md5.c|src/netif/ppp/polarssl/sha1.c" flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="lwip"/>
++						<entry excluding="src/netif/ppp/polarssl/sha1.c|src/netif/ppp/polarssl/des.c|src/netif/ppp/polarssl/md4.c|src/netif/ppp/polarssl/md5.c|src/netif/ppp/polarssl/arc4.c" flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="lwip"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="osa"/>
+ 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="radio"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="source"/>
+@@ -776,25 +779,26 @@
+ 						</toolChain>
+ 					</folderInfo>
+ 					<sourceEntries>
+-						<entry excluding="src/netif/ppp/polarssl/arc4.c|src/netif/ppp/polarssl/des.c|src/netif/ppp/polarssl/md4.c|src/netif/ppp/polarssl/md5.c|src/netif/ppp/polarssl/sha1.c" flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="lwip"/>
+-						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="usb"/>
+-						<entry excluding="freertos/portable/heap_1.c|freertos/portable/heap_2.c|freertos/portable/heap_3.c|freertos/portable/heap_5.c" flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="amazon-freertos"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="CMSIS"/>
+-						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="source"/>
+-						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="utilities"/>
++						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="CMSIS_driver"/>
++						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="accel"/>
++						<entry excluding="freertos/portable/heap_1.c|freertos/portable/heap_2.c|freertos/portable/heap_3.c|freertos/portable/heap_5.c" flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="amazon-freertos"/>
++						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="board"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="codec"/>
++						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="codec2"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="component"/>
++						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="device"/>
++						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="drivers"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="emwin"/>
++						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="libs"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="littlefs"/>
++						<entry excluding="src/netif/ppp/polarssl/sha1.c|src/netif/ppp/polarssl/des.c|src/netif/ppp/polarssl/md4.c|src/netif/ppp/polarssl/md5.c|src/netif/ppp/polarssl/arc4.c" flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="lwip"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="osa"/>
+-						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="libs"/>
+-						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="drivers"/>
+-						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="CMSIS_driver"/>
+-						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="device"/>
+-						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="board"/>
+-						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="codec2"/>
+ 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="radio"/>
++						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="source"/>
+ 						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="startup"/>
++						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="usb"/>
++						<entry flags="LOCAL|VALUE_WORKSPACE_PATH" kind="sourcePath" name="utilities"/>
+ 					</sourceEntries>
+ 				</configuration>
+ 			</storageModule>
+diff --git a/accel/fsl_mma.c b/accel/fsl_mma.c
+new file mode 100644
+index 0000000..f175a84
+--- /dev/null
++++ b/accel/fsl_mma.c
+@@ -0,0 +1,153 @@
++/*
++ * Copyright (c) 2013-2015, Freescale Semiconductor, Inc.
++ * Copyright 2016-2018 NXP
++ * All rights reserved.
++ *
++ * SPDX-License-Identifier: BSD-3-Clause
++ */
++
++#include "fsl_mma.h"
++
++/******************************************************************************
++ * Code
++ ******************************************************************************/
++status_t MMA_Init(mma_handle_t *handle, mma_config_t *config)
++{
++    assert(handle);
++    assert(config);
++
++    uint8_t val = 0;
++
++    /* Initialize the callback function. */
++    handle->I2C_SendFunc    = config->I2C_SendFunc;
++    handle->I2C_ReceiveFunc = config->I2C_ReceiveFunc;
++    /* Set Slave Address. */
++    handle->slaveAddress = config->slaveAddress;
++
++    if (MMA_ReadReg(handle, kMMA8652_WHO_AM_I, &val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    if (val != kMMA8652_WHO_AM_I_Device_ID)
++    {
++        return kStatus_Fail;
++    }
++
++    /* Put the mma8652 into standby mode */
++    if (MMA_ReadReg(handle, kMMA8652_CTRL_REG1, &val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    val &= (uint8_t)(~(0x01));
++    if (MMA_WriteReg(handle, kMMA8652_CTRL_REG1, val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    /* Set the range, -4g to 4g */
++    if (MMA_ReadReg(handle, kMMA8652_XYZ_DATA_CFG, &val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    val &= (uint8_t)(~0x03);
++    val |= 0x01;
++    if (MMA_WriteReg(handle, kMMA8652_XYZ_DATA_CFG, val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    /* Set the F_MODE, disable FIFO */
++    if (MMA_ReadReg(handle, kMMA8652_F_SETUP, &val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    val &= 0x3F;
++    if (MMA_WriteReg(handle, kMMA8652_F_SETUP, val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    /* Put the mma8652 into active mode */
++    if (MMA_ReadReg(handle, kMMA8652_CTRL_REG1, &val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    val |= 0x01;
++    val &= (uint8_t)(~0x02); /* set F_READ to 0 */
++    if (MMA_WriteReg(handle, kMMA8652_CTRL_REG1, val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    return kStatus_Success;
++}
++
++status_t MMA_ReadSensorData(mma_handle_t *handle, mma_data_t *accel)
++{
++    uint8_t val      = 0U;
++    uint8_t ucStatus = 0;
++
++    do
++    {
++        if (MMA_ReadReg(handle, kMMA8652_STATUS, &ucStatus) != kStatus_Success)
++        {
++            return kStatus_Fail;
++        }
++    } while (!(ucStatus & 0x08));
++
++    if (MMA_ReadReg(handle, kMMA8652_OUT_X_MSB, &val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    accel->accelXMSB = val;
++    if (MMA_ReadReg(handle, kMMA8652_OUT_X_LSB, &val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    accel->accelXLSB = val;
++
++    if (MMA_ReadReg(handle, kMMA8652_OUT_Y_MSB, &val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    accel->accelYMSB = val;
++    if (MMA_ReadReg(handle, kMMA8652_OUT_Y_LSB, &val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    accel->accelYLSB = val;
++
++    if (MMA_ReadReg(handle, kMMA8652_OUT_Z_MSB, &val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    accel->accelZMSB = val;
++    if (MMA_ReadReg(handle, kMMA8652_OUT_Z_LSB, &val) != kStatus_Success)
++    {
++        return kStatus_Fail;
++    }
++    accel->accelZLSB = val;
++
++    return kStatus_Success;
++}
++
++status_t MMA_ReadReg(mma_handle_t *handle, uint8_t reg, uint8_t *val)
++{
++    assert(handle);
++    assert(val);
++
++    if (!handle->I2C_ReceiveFunc)
++    {
++        return kStatus_Fail;
++    }
++
++    return handle->I2C_ReceiveFunc(handle->slaveAddress, reg, 1, val, 1);
++}
++
++status_t MMA_WriteReg(mma_handle_t *handle, uint8_t reg, uint8_t val)
++{
++    assert(handle);
++
++    if (!handle->I2C_SendFunc)
++    {
++        return kStatus_Fail;
++    }
++
++    return handle->I2C_SendFunc(handle->slaveAddress, reg, 1, val);
++}
+diff --git a/accel/fsl_mma.h b/accel/fsl_mma.h
+new file mode 100644
+index 0000000..a7933e5
+--- /dev/null
++++ b/accel/fsl_mma.h
+@@ -0,0 +1,146 @@
++/*
++ * Copyright (c) 2015, Freescale Semiconductor, Inc.
++ * Copyright 2016-2018 NXP
++ * All rights reserved.
++ *
++ * SPDX-License-Identifier: BSD-3-Clause
++ */
++
++#ifndef _FSL_MMA8652FC_H_
++#define _FSL_MMA8652FC_H_
++
++#include "fsl_common.h"
++
++#define WHO_AM_I_REG kMMA8652_WHO_AM_I
++#define MMA8652FC_ACCEL_RESOLUTION_BITS 12
++
++/*!
++ * @brief Register definitions for the MMA8652.
++ */
++enum _MMA8652_constants
++{
++    kMMA8652_STATUS             = 0x00,
++    kMMA8652_OUT_X_MSB          = 0x01,
++    kMMA8652_OUT_X_LSB          = 0x02,
++    kMMA8652_OUT_Y_MSB          = 0x03,
++    kMMA8652_OUT_Y_LSB          = 0x04,
++    kMMA8652_OUT_Z_MSB          = 0x05,
++    kMMA8652_OUT_Z_LSB          = 0x06,
++    kMMA8652_F_SETUP            = 0x09,
++    kMMA8652_TRIG_CFG           = 0x0a,
++    kMMA8652_SYSMOD             = 0x0b,
++    kMMA8652_INT_SOURCE         = 0x0c,
++    kMMA8652_WHO_AM_I           = 0x0d,
++    kMMA8652_WHO_AM_I_Device_ID = 0x4a,
++    kMMA8652_XYZ_DATA_CFG       = 0x0e,
++    kMMA8652_CTRL_REG1          = 0x2a,
++    kMMA8652_CTRL_REG2          = 0x2b,
++    kMMA8652_CTRL_REG3          = 0x2c,
++    kMMA8652_CTRL_REG4          = 0x2d,
++    kMMA8652_CTRL_REG5          = 0x2e
++};
++
++typedef struct _mma_data
++{
++    uint8_t accelXMSB;
++    uint8_t accelXLSB;
++    uint8_t accelYMSB;
++    uint8_t accelYLSB;
++    uint8_t accelZMSB;
++    uint8_t accelZLSB;
++} mma_data_t;
++
++/*! @brief Define I2C access function. */
++typedef status_t (*I2C_SendFunc_t)(uint8_t deviceAddress, uint32_t subAddress, uint8_t subaddressSize, uint32_t txBuff);
++typedef status_t (*I2C_ReceiveFunc_t)(
++    uint8_t deviceAddress, uint32_t subAddress, uint8_t subaddressSize, uint8_t *rxBuff, uint8_t rxBuffSize);
++
++/*! @brief MMA8652FC configure definition. This structure should be global.*/
++typedef struct _mma_handle
++{
++    /* Pointer to the user-defined I2C Send Data function. */
++    I2C_SendFunc_t I2C_SendFunc;
++    /* Pointer to the user-defined I2C Receive Data function. */
++    I2C_ReceiveFunc_t I2C_ReceiveFunc;
++    /* The I2C slave address . */
++    uint8_t slaveAddress;
++} mma_handle_t;
++
++/*! @brief MMA8652FC configure structure.*/
++typedef struct _mma_config
++{
++    /* Pointer to the user-defined I2C Send Data function. */
++    I2C_SendFunc_t I2C_SendFunc;
++    /* Pointer to the user-defined I2C Receive Data function. */
++    I2C_ReceiveFunc_t I2C_ReceiveFunc;
++    /* The I2C slave address . */
++    uint8_t slaveAddress;
++} mma_config_t;
++
++/*******************************************************************************
++ * API
++ ******************************************************************************/
++
++#if defined(__cplusplus)
++extern "C" {
++#endif
++
++/*!
++ * @brief Initialize the MMA8652 driver instance.
++ *
++ * @param accel_device Device driver state structure that will be filled in by this function.
++ *      It is the responsibility of the caller to provide storage for this structure, and
++ *      to free that storage when the driver is no longer needed.
++ *
++ * @return kStatus_Success if success or kStatus_Fail if error.
++ */
++status_t MMA_Init(mma_handle_t *handle, mma_config_t *config);
++
++/*!
++ * @brief Read the current acceleration values.
++ *
++ * @param handle Pointer to a valid accel_device instance structure.
++ * @param accel Pointer to a structure that will be filled in with the current acceleration
++ *      values for all three axes.
++ *
++ * @return kStatus_Success if success or kStatus_Fail if error.
++ */
++status_t MMA_ReadSensorData(mma_handle_t *handle, mma_data_t *accel);
++
++/*!
++ * @brief Read the value of register in accelerometer.
++ *
++ * @param handle Pointer to a valid accel_device instance structure.
++ * @param reg variable store address of register
++ * @param val pointer store return value.
++ *
++ * @return kStatus_Success if success or kStatus_Fail if error.
++ */
++status_t MMA_ReadReg(mma_handle_t *handle, uint8_t reg, uint8_t *val);
++
++/*!
++ * @brief Write the value to register of accelerometer.
++ *
++ * @param handle Pointer to a valid accel_device instance structure.
++ * @param reg variable store address of register
++ * @param val pointer store value which is writen to accelerometer.
++ *
++ * @return kStatus_Success if success or kStatus_Fail if error.
++ */
++status_t MMA_WriteReg(mma_handle_t *handle, uint8_t reg, uint8_t val);
++
++/*!
++ * @brief Get device accelerator resolution bits.
++ *
++ * @return accelerator resolution bits.
++ */
++static inline uint8_t MMA_GetResolutionBits(void)
++{
++    return MMA8652FC_ACCEL_RESOLUTION_BITS;
++}
++
++#if defined(__cplusplus)
++}
++#endif
++
++#endif /* _FSL_MMA8652FC_H_ */
+diff --git a/source/main.c b/source/main.c
+index 1407570..23fdf3b 100644
+--- a/source/main.c
++++ b/source/main.c
+@@ -19,6 +19,10 @@
+ #include "fsl_sysmpu.h"
+ #endif /* FSL_FEATURE_SOC_SYSMPU_COUNT */
+ 
++#if defined(BOARD_ACCEL_MMA)
++#include "fsl_mma.h"
++#endif
++
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <assert.h>
+@@ -42,6 +46,26 @@
+ 
+ #include "sx1276.h"
+ 
++#if defined(BOARD_ACCEL_MMA)
++#define XYZ_DATA_CFG kMMA8652_XYZ_DATA_CFG
++#define ACCEL_INIT(handle, config) MMA_Init(handle, config)
++#define ACCEL_READ_REG(handle, reg, val) MMA_ReadReg(handle, reg, val)
++#define ACCELL_READ_SENSOR_DATA(handle, data) MMA_ReadSensorData(handle, data)
++#define ACCEL_GET_RESOLUTION() MMA_GetResolutionBits()
++#endif
++
++#if defined(BOARD_ACCEL_MMA)
++mma_handle_t accelHandle            = {0};
++static const uint8_t accelAddress[] = {0x1CU, 0x1DU, 0x1EU, 0x1FU};
++mma_config_t config                 = {0};
++#endif
++
++/* Accelerometer data scale */
++uint8_t g_accelDataScale = 0;
++/* Resolution of accelerometer (14 bit or 12 bit) */
++uint8_t g_accelResolution = 0;
++
++
+ #define BUTTON_SW5 kINPUTMUX_GpioPort1Pin1ToPintsel
+ #define DIO0_IRQ   kINPUTMUX_GpioPort1Pin18ToPintsel
+ //#define DIO2_IRQ   kINPUTMUX_GpioPort2Pin0ToPintsel
+@@ -126,6 +150,67 @@ void CreateTasks(void)
+ 
+ }
+ 
++#if defined(BOARD_ACCEL_MMA)
++/*!
++ * @brief Initialize accelerometer sensor
++ */
++status_t init_mag_accel(uint8_t *accelDataScale, uint8_t *accelResolution)
++{
++    uint8_t arrayAddrSize = 0;
++    uint8_t sensorRange   = 0;
++    uint16_t i            = 0;
++    status_t result       = kStatus_Fail;
++
++    /* Configure the I2C function */
++    config.I2C_SendFunc    = BOARD_Accel_I2C_Send;
++    config.I2C_ReceiveFunc = BOARD_Accel_I2C_Receive;
++
++    /* Initialize sensor devices */
++    arrayAddrSize = sizeof(accelAddress) / sizeof(accelAddress[0]);
++    for (i = 0; i < arrayAddrSize; i++)
++    {
++        config.slaveAddress = accelAddress[i];
++        /* Initialize accelerometer sensor */
++        result = ACCEL_INIT(&accelHandle, &config);
++        if (result == kStatus_Success)
++        {
++            break;
++        }
++    }
++
++    if (result != kStatus_Success)
++    {
++        PRINTF("\r\nSensor device initialize failed!\r\n");
++        PRINTF("\r\nPlease check the sensor chip\r\n");
++        return result;
++    }
++
++    *accelResolution = ACCEL_GET_RESOLUTION();
++
++    /* Get sensor range */
++    if (kStatus_Success != ACCEL_READ_REG(&accelHandle, XYZ_DATA_CFG, &sensorRange))
++    {
++        return kStatus_Fail;
++    }
++
++    PRINTF("\r\nSensor device sensorRange 0x%x !\r\n",sensorRange);
++    if (sensorRange == 0x00)
++    {
++        *accelDataScale = 2U;
++    }
++    else if (sensorRange == 0x01)
++    {
++        *accelDataScale = 4U;
++    }
++    else if (sensorRange == 0x10)
++    {
++        *accelDataScale = 8U;
++    }
++
++    return kStatus_Success;
++}
++#endif
++
+ /*******************************************************************************
+  * sx127x SPI controller configure code
+  ******************************************************************************/
+@@ -294,6 +379,19 @@ int main(void)
+     BOARD_InitBootPins();
+     BOARD_BootClockPLL180M();
+     BOARD_InitDebugConsole();
++
++#if defined(BOARD_ACCEL_MMA)
++    /* Initialize I2C */
++    BOARD_Accel_I2C_Init();
++
++    /* Initialize magnetometer and accelerometer */
++    if (kStatus_Success != init_mag_accel(&g_accelDataScale, &g_accelResolution))
++    {
++        /* Failed to initialize accelerometer */
++        for (;;)
++            ;
++    }
++#endif
+     Sx127x_Gpio_Init();
+     Sx127x_Spi_Ctrl_Init();
+     init_gpio_int();
+-- 
+2.7.4
+

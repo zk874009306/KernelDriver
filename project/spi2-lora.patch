@@ -1,0 +1,277 @@
+diff --git a/board/pin_mux.c b/board/pin_mux.c
+index 33110d6..3d651e4 100644
+--- a/board/pin_mux.c
++++ b/board/pin_mux.c
+@@ -49,6 +49,8 @@ void BOARD_InitBootPins(void) {
+ #define PIN17_IDX                       17u   /*!< Pin number for pin 17 in a port 1 */
+ #define PIN05_IDX                        5u   /*!< Pin number for pin 5 in a port 0 */
+ #define PIN22_IDX                       22u   /*!< Pin number for pin 22 in a port 0 */
++#define PIN26_IDX                       26u   /*!< Pin number for pin 26 in a port 0 */
++#define PIN27_IDX                       27u   /*!< Pin number for pin 27 in a port 0 */
+ #define PIN29_IDX                       29u   /*!< Pin number for pin 29 in a port 0 */
+ #define PIN30_IDX                       30u   /*!< Pin number for pin 30 in a port 0 */
+ #define PIN0_IDX                         0u   /*!< Pin number for pin 00 in a port 2 */
+@@ -64,6 +66,7 @@ void BOARD_InitBootPins(void) {
+ #define PIN02_IDX                        2u   /*!< Pin number for pin 2 in a port 4 */
+ #define PIN03_IDX                        3u   /*!< Pin number for pin 3 in a port 4 */
+ #define PIN06_IDX                        6u   /*!< Pin number for pin 6 in a port 4 */
++#define PIN8_IDX                         8u   /*!< Pin number for pin 8 in a port 4 */
+ 
+ #define PORT0_IDX                        0u   /*!< Port index */
+ #define PORT1_IDX                        1u   /*!< Port index */
+@@ -103,6 +106,11 @@ BOARD_InitPins:
+ #define IOCON_PIO_I2CDRIVE_HIGH 0x0400u /*!<@brief High drive: 20 mA */
+ #define IOCON_PIO_I2CFILTER_DI 0x0800u  /*!<@brief I2C 50 ns glitch filter disabled */
+ #define IOCON_PIO_I2CSLEW_I2C 0x00u     /*!<@brief I2C mode */
++
++#define IOCON_PIO_I2CDRIVE_LOW        0x00u   /*!< Low drive: 4 mA */
++//#define IOCON_PIO_I2CFILTER_DI      0x0800u   /*!< I2C 50 ns glitch filter disabled */
++#define IOCON_PIO_I2CSLEW_GPIO        0x40u   /*!< GPIO mode */
++
+ #define IOCON_PIO_INPFILT_OFF 0x0200u   /*!<@brief Input filter disabled */
+ #define IOCON_PIO_INV_DI 0x00u          /*!<@brief Input function is not inverted */
+ #define IOCON_PIO_MODE_INACT 0x00u      /*!<@brief No addition pin function */
+@@ -216,7 +224,8 @@ void BOARD_InitPins(void) { /* Function assigned for the Core #0 (ARM Cortex-M4)
+  /* PORT3 PIN11 (coords: B2) is configured as MCLK */
+  IOCON_PinMuxSet(IOCON, PORT3_IDX, PIN11_IDX, port3_pin11_config);
+ 
+- const uint32_t port3_pin23_config = (
++#if 0
++/* const uint32_t port3_pin23_config = (
+ 	IOCON_PIO_FUNC1 |                                       /* Pin is configured as FC2_CTS_SDA_SSEL0 */
+ 	IOCON_PIO_I2CSLEW_I2C |                                 /* I2C mode */
+ 	IOCON_PIO_INV_DI |                                      /* Input function is not inverted */
+@@ -237,9 +246,12 @@ void BOARD_InitPins(void) { /* Function assigned for the Core #0 (ARM Cortex-M4)
+ 	IOCON_PIO_I2CDRIVE_HIGH |                               /* High drive: 20 mA */
+ 	IOCON_PIO_I2CFILTER_DI                                  /* I2C 50 ns glitch filter disabled */
+  );
++
+  /* PORT3 PIN24 (coords: E2) is configured as FC2_RTS_SCL_SSEL1 */
+  IOCON_PinMuxSet(IOCON, PORT3_IDX, PIN24_IDX, port3_pin24_config);
+ 
++#endif
++
+  const uint32_t port4_pin1_config = (
+ 	IOCON_PIO_FUNC2 |                                        /* Pin is configured as FC6_SCK */
+ 	IOCON_PIO_MODE_PULLUP |                                  /* Selects pull-up function */
+@@ -342,6 +354,88 @@ void BOARD_InitPins(void) { /* Function assigned for the Core #0 (ARM Cortex-M4)
+ 		);
+ 	IOCON_PinMuxSet(IOCON, PORT4_IDX, PIN06_IDX, port4_pin06_config); /* PORT3 PIN30 (coords: K13) is configured as FC9_CTS_SDA_SSEL0 */
+ 
++#if 0
++	const uint32_t port0_pin02_config = (
++	    IOCON_PIO_FUNC1 |                                        /* Pin is configured as FC3_MISO*/
++	    IOCON_PIO_MODE_PULLUP |                                  /* Selects pull-up function */
++	    IOCON_PIO_INV_DI |                                       /* Input function is not inverted */
++	    IOCON_PIO_DIGITAL_EN |                                   /* Enables digital function */
++	    IOCON_PIO_INPFILT_OFF |                                  /* Input filter disabled */
++	    IOCON_PIO_SLEW_STANDARD |                                /* Standard mode, output slew rate control is enabled */
++	    IOCON_PIO_OPENDRAIN_DI                                   /* Open drain is disabled */
++	  );
++	  IOCON_PinMuxSet(IOCON, PORT0_IDX, PIN02_IDX, port0_pin02_config); /* PORT0 PIN02 (coords: N2) is configured as FC3_MISO */
++	  const uint32_t port0_pin03_config = (
++	    IOCON_PIO_FUNC1 |                                        /* Pin is configured as FC3_MOSI */
++	    IOCON_PIO_MODE_PULLUP |                                  /* Selects pull-up function */
++	    IOCON_PIO_INV_DI |                                       /* Input function is not inverted */
++	    IOCON_PIO_DIGITAL_EN |                                   /* Enables digital function */
++	    IOCON_PIO_INPFILT_OFF |                                  /* Input filter disabled */
++	    IOCON_PIO_OPENDRAIN_DI                                   /* Open drain is disabled */
++	  );
++	  IOCON_PinMuxSet(IOCON, PORT0_IDX, PIN03_IDX, port0_pin03_config); /* PORT0 PIN03 (coords: P5) is configured as FC3_MOSI */
++	  const uint32_t port0_pin0_config = (
++	    IOCON_PIO_FUNC2 |                                        /* Pin is configured as FC3_CLK */
++	    IOCON_PIO_MODE_PULLUP |                                  /* Selects pull-up function */
++	    IOCON_PIO_INV_DI |                                       /* Input function is not inverted */
++	    IOCON_PIO_DIGITAL_EN |                                   /* Enables digital function */
++	    IOCON_PIO_INPFILT_OFF |                                  /* Input filter disabled */
++	    IOCON_PIO_OPENDRAIN_DI                                   /* Open drain is disabled */
++	  );
++	  IOCON_PinMuxSet(IOCON, PORT0_IDX, PIN0_IDX, port0_pin0_config); /* PORT0 PIN0 (coords: N5) is configured as FC3_CLK */
++
++	  const uint32_t port0_pin01_config = (
++	  		IOCON_PIO_FUNC0 |                                        /* Pin is configured as FC9_CTS_SDA_SSEL0 */
++	  		IOCON_PIO_MODE_PULLUP |                                  /* Selects pull-up function */
++	  		IOCON_PIO_INV_DI |                                       /* Input function is not inverted */
++	  		IOCON_PIO_DIGITAL_EN |                                   /* Enables digital function */
++	  		IOCON_PIO_INPFILT_OFF |                                  /* Input filter disabled */
++	  		IOCON_PIO_SLEW_STANDARD |                                /* Standard mode, output slew rate control is enabled */
++	  		IOCON_PIO_OPENDRAIN_DI                                   /* Open drain is disabled */
++	  		);
++	  	IOCON_PinMuxSet(IOCON, PORT0_IDX, PIN01_IDX, port0_pin01_config); /* PORT0 PIN01 (coords: K13) is configured as FC9_CTS_SDA_SSEL0 */
++#endif
++
++	    const uint32_t port0_pin26_config = (
++	      IOCON_PIO_FUNC1 |                                        /* Pin is configured as FC2_RXD_SDA_MOSI */
++	      IOCON_PIO_MODE_PULLUP |                                  /* Selects pull-up function */
++	      IOCON_PIO_INV_DI |                                       /* Input function is not inverted */
++	      IOCON_PIO_DIGITAL_EN |                                   /* Enables digital function */
++	      IOCON_PIO_INPFILT_OFF |                                  /* Input filter disabled */
++	      IOCON_PIO_SLEW_STANDARD |                                /* Standard mode, output slew rate control is enabled */
++	      IOCON_PIO_OPENDRAIN_DI                                   /* Open drain is disabled */
++	    );
++	    IOCON_PinMuxSet(IOCON, PORT0_IDX, PIN26_IDX, port0_pin26_config); /* PORT0 PIN26 (coords: M13) is configured as FC2_RXD_SDA_MOSI */
++	    const uint32_t port0_pin27_config = (
++	      IOCON_PIO_FUNC1 |                                        /* Pin is configured as FC2_TXD_SCL_MISO */
++	      IOCON_PIO_MODE_PULLUP |                                  /* Selects pull-up function */
++	      IOCON_PIO_INV_DI |                                       /* Input function is not inverted */
++	      IOCON_PIO_DIGITAL_EN |                                   /* Enables digital function */
++	      IOCON_PIO_INPFILT_OFF |                                  /* Input filter disabled */
++	      IOCON_PIO_SLEW_STANDARD |                                /* Standard mode, output slew rate control is enabled */
++	      IOCON_PIO_OPENDRAIN_DI                                   /* Open drain is disabled */
++	    );
++	    IOCON_PinMuxSet(IOCON, PORT0_IDX, PIN27_IDX, port0_pin27_config); /* PORT0 PIN27 (coords: L9) is configured as FC2_TXD_SCL_MISO */
++	    const uint32_t port3_pin23_config = (
++	      IOCON_PIO_FUNC0 |                                        /* Pin is configured as FC2_CTS_SDA_SSEL0 */
++	      IOCON_PIO_I2CSLEW_GPIO |                                 /* GPIO mode */
++	      IOCON_PIO_INV_DI |                                       /* Input function is not inverted */
++	      IOCON_PIO_DIGITAL_EN |                                   /* Enables digital function */
++	      IOCON_PIO_INPFILT_OFF |                                  /* Input filter disabled */
++	      IOCON_PIO_I2CDRIVE_LOW |                                 /* Low drive: 4 mA */
++	      IOCON_PIO_I2CFILTER_DI                                   /* I2C 50 ns glitch filter disabled */
++	    );
++	    IOCON_PinMuxSet(IOCON, PORT3_IDX, PIN23_IDX, port3_pin23_config); /* PORT3 PIN23 (coords: C2) is configured as FC2_CTS_SDA_SSEL0 */
++	    const uint32_t port4_pin8_config = (
++	        IOCON_PIO_FUNC2 |                                        /* Pin is configured as FC2_SCK */
++	        IOCON_PIO_MODE_PULLUP |                                  /* Selects pull-up function */
++	        IOCON_PIO_INV_DI |                                       /* Input function is not inverted */
++	        IOCON_PIO_DIGITAL_EN |                                   /* Enables digital function */
++	        IOCON_PIO_INPFILT_OFF |                                  /* Input filter disabled */
++	        IOCON_PIO_SLEW_STANDARD |                                /* Standard mode, output slew rate control is enabled */
++	        IOCON_PIO_OPENDRAIN_DI                                   /* Open drain is disabled */
++	      );
++	      IOCON_PinMuxSet(IOCON, PORT4_IDX, PIN8_IDX, port4_pin8_config); /* PORT4 PIN8 (coords: B14) is configured as FC2_SCK */
+ }
+ /*
+  * TEXT BELOW IS USED AS SETTING FOR TOOLS *************************************
+diff --git a/radio/sx1276.h b/radio/sx1276.h
+index a56c69f..8e65500 100644
+--- a/radio/sx1276.h
++++ b/radio/sx1276.h
+@@ -14,8 +14,8 @@
+ -------------------------IMPORT FUNCTIONS FOR DRIVER----------------------------
+ ================================================================================
+ */
+-#define SX1276_NSS_LOW( )          GPIO_PinWrite(GPIO, 4, 6, 0)
+-#define SX1276_NSS_HIGH( )         GPIO_PinWrite(GPIO, 4, 6, 1)
++#define SX1276_NSS_LOW( )          GPIO_PinWrite(GPIO, 3, 23, 0)
++#define SX1276_NSS_HIGH( )         GPIO_PinWrite(GPIO, 3, 23, 1)
+ 
+ #define SX1276_RESET_LOW( )        GPIO_PinWrite(GPIO, 1, 17, 0)
+ #define SX1276_RESET_HIGH( )       GPIO_PinWrite(GPIO, 1, 17, 1)
+diff --git a/source/i2s_transfer.c b/source/i2s_transfer.c
+index 286afd3..091c173 100644
+--- a/source/i2s_transfer.c
++++ b/source/i2s_transfer.c
+@@ -387,5 +387,5 @@ void audio_main_playback(void *handle) {
+ 	}
+ }
+ 
+-ADD_TASK_WORK(NULL, audio_main_capture, "audio_main_capture", 2000, NULL, TASK_AUDIO_PRIORITY);
++//ADD_TASK_WORK(NULL, audio_main_capture, "audio_main_capture", 2000, NULL, TASK_AUDIO_PRIORITY);
+ //ADD_TASK_WORK(NULL, audio_main_playback, "audio_main_playback", 5000, NULL, TASK_AUDIO_PRIORITY);
+diff --git a/source/main.c b/source/main.c
+index b1aeaf4..da064cf 100644
+--- a/source/main.c
++++ b/source/main.c
+@@ -129,6 +129,9 @@ void CreateTasks(void)
+ #define EXAMPLE_MASTER_SPI_SPOL kSPI_SpolActiveAllLow
+ #define SPI_NVIC_PRIO 2
+ 
++#define SPI2_MASTER SPI2
++#define SPI2_MASTER_IRQ FLEXCOMM2_IRQn
++#define SPI2_SSEL kSPI_Ssel0
+ spi_rtos_handle_t master_rtos_handle;
+ spi_transfer_t masterXfer = { 0 };
+ uint8_t masterReceiveBuffer[32];
+@@ -146,7 +149,7 @@ void LPC54018_SPI_Send_Data(unsigned char *TxBuffer, unsigned int num)
+     masterXfer.rxData = masterReceiveBuffer;
+     masterXfer.configFlags |= kSPI_FrameAssert;
+     status = SPI_RTOS_Transfer(&master_rtos_handle, &masterXfer);
+-    //PRINTF("TxBuffer 0x%x masterReceiveBuffer 0x%x",TxBuffer[0],masterReceiveBuffer[0]);
++   // PRINTF("TxBuffer 0x%x masterReceiveBuffer 0x%x \r\n",TxBuffer[0],masterReceiveBuffer[0]);
+ 
+ }
+ void LPC54018_SPI_Get_Data(unsigned char *RxBuffer, unsigned int num)
+@@ -158,7 +161,7 @@ void LPC54018_SPI_Get_Data(unsigned char *RxBuffer, unsigned int num)
+     masterXfer.rxData = RxBuffer;
+     masterXfer.configFlags |= kSPI_FrameAssert;
+     status = SPI_RTOS_Transfer(&master_rtos_handle, &masterXfer);
+-
++   // PRINTF("Get data : 0x%x\r\n", RxBuffer[0]);
+ }
+ 
+ static void Sx127x_Gpio_Init(void)
+@@ -166,12 +169,26 @@ static void Sx127x_Gpio_Init(void)
+     GPIO_PortInit(GPIO, 1);
+     GPIO_PinInit(GPIO, 1, 17, &config_gpio_output);    // SX1278 reset
+     GPIO_PinInit(GPIO, 1, 18, &config_gpio_input);     // SX1278 DIO0
++
++   // GPIO_PortInit(GPIO, 0);
++   // GPIO_PinInit(GPIO, 0, 1, &config_gpio_output);     // SX1278 NSS
++
++  //  GPIO_PinWrite(GPIO, 0, 1, 0);
++  //  GPIO_PinWrite(GPIO, 0, 1, 1);
++
+     GPIO_PortInit(GPIO, 4);
+     GPIO_PinInit(GPIO, 4, 6, &config_gpio_output);     // SX1278 NSS
++
++ //   GPIO_PinWrite(GPIO, 4, 6, 0);
++ //   GPIO_PinWrite(GPIO, 4, 6, 1);
++
+     GPIO_PortInit(GPIO, 0);
+     GPIO_PinInit(GPIO, 0, 5, &config_gpio_output);     // SX1278 TXEN
++
+     GPIO_PortInit(GPIO, 3);
+     GPIO_PinInit(GPIO, 3, 13, &config_gpio_output);     // SX1278 RXEN
++    GPIO_PinInit(GPIO, 3, 23, &config_gpio_output);     // SX1278 SSN
++
+     GPIO_PortInit(GPIO, 2);
+     GPIO_PinInit(GPIO, 2, 0, &config_gpio_input);     // SX1278 DI02
+ 
+@@ -208,6 +225,34 @@ status_t Sx127x_Spi_Ctrl_Init(void)
+     return status;
+ }
+ 
++status_t Sx127x_Spi2_Ctrl_Init(void)
++{
++    spi_master_config_t masterConfig;
++    status_t status;
++    uint32_t sourceClock;
++
++    /* attach 12 MHz clock to SPI2 */
++    CLOCK_AttachClk(kFRO12M_to_FLEXCOMM2);
++
++    NVIC_SetPriority(SPI2_MASTER_IRQ, SPI_NVIC_PRIO);
++
++    SPI_MasterGetDefaultConfig(&masterConfig);
++    masterConfig.baudRate_Bps = 5000000;
++    masterConfig.sselNum = SPI2_SSEL;
++    masterConfig.sselPol = (spi_spol_t) EXAMPLE_MASTER_SPI_SPOL;
++
++    sourceClock = 10000000;
++    status = SPI_RTOS_Init(&master_rtos_handle, SPI2_MASTER,
++            &masterConfig, sourceClock);
++
++    if (status != kStatus_Success) {
++        PRINTF("SPI master: error during initialization. \r\n");
++        return status;
++    }
++
++    return status;
++}
++
+ /*******************************************************************************
+  * sx127x SPI controller configure code
+  ******************************************************************************/
+@@ -278,9 +323,9 @@ int main(void)
+     BOARD_BootClockPLL180M();
+     BOARD_InitDebugConsole();
+     Sx127x_Gpio_Init();
+-    Sx127x_Spi_Ctrl_Init();
++    Sx127x_Spi2_Ctrl_Init();
+     init_gpio_int();
+-    usb_main();
++  //  usb_main();
+ 
+     CreateTasks();
+ 

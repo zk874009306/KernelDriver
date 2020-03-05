@@ -1,0 +1,681 @@
+From e3dfa68c3d7739dade7ac87f6adf4e3e429c8410 Mon Sep 17 00:00:00 2001
+From: zhangkang <zhangkang@datang.com>
+Date: Fri, 13 Dec 2019 18:46:59 +0800
+Subject: [PATCH] add audio message queue control code && capture audio data
+ from mic and encode data send to other devices using lora
+
+---
+ radio/radio.c           | 194 +++++++++++++++++++++++++-----------------------
+ radio/sx1276-lora.c     |   6 +-
+ source/FreeRTOSConfig.h |   2 +-
+ source/common.h         |  13 ++++
+ source/i2s_transfer.c   | 148 ++++++++++++++++++++++++------------
+ source/main.c           |  39 +++++-----
+ 6 files changed, 238 insertions(+), 164 deletions(-)
+
+diff --git a/radio/radio.c b/radio/radio.c
+index 6d8445e..24fd60d 100644
+--- a/radio/radio.c
++++ b/radio/radio.c
+@@ -2,95 +2,97 @@
+ #include "fsl_debug_console.h"
+ #include "sx1276.h"
+ 
+-#include "timers.h"
+-
+ /* The software timer period. */
+ #define TX_TIMER_PERIOD_MS (60 / portTICK_PERIOD_MS)
+ #define TEST_TIMER_PERIOD_MS (1000 / portTICK_PERIOD_MS)
+ 
+ #define SEND_PACKAGE_LEN        18
++#define LOG_ENABLE 0
+ 
+-uint8_t audio_buff[SEND_PACKAGE_LEN] = "123456789012345678";
++//uint8_t audio_buff[SEND_PACKAGE_LEN] = "123456789012345678";
+ 
+ TaskHandle_t sx1276_task_handler;
+ TaskHandle_t sx1276_tx_handler;
+-TimerHandle_t TxTimerHandle = NULL;
++TaskHandle_t message_queue_handler;
++//TimerHandle_t TxTimerHandle = NULL;
+ 
+-ppt_state_s ptt_state = PTT_RELEASE;
+-radio_s radio_state = RADIO_IDLE;
++extern QueueHandle_t AudioMsgSendQueue;
++extern QueueHandle_t AudioMsgRecvQueue;
+ 
++Encodec_t encode_frame;
++Decodec_t receive_frame;
+ 
+-void radio_PttPress()
+-{
+-    radio_state = RADIO_IDLE;
+-    xTimerStart(TxTimerHandle, 0);
++ppt_state_s ptt_state = PTT_RELEASE;
++radio_s radio_state = RADIO_IDLE;
+ 
+-//    SX1276_SendPacket(audio_buff, sizeof(audio_buff));
+-//    PRINTF("SX1276_SendPacket %d\r\n", sizeof(audio_buff));
+ 
+-//start encode  no interface
+-PRINTF("start encode  no interface\r\n");
++BaseType_t GetOneEncodedFrame(Encodec_t *data){
++    if (NULL == AudioMsgSendQueue){
++		AudioMsgSendQueue = xQueueCreate(8, sizeof( Encodec_t ));
++	}
++	return xQueueReceive(AudioMsgSendQueue, data, portMAX_DELAY);
++}
+ 
++BaseType_t PutThreeEncodedFrame(Decodec_t *data){
++	if (NULL == AudioMsgRecvQueue){
++		AudioMsgRecvQueue = xQueueCreate(8, sizeof( Decodec_t ));
++	}
++	return xQueueSend(AudioMsgRecvQueue, data, portMAX_DELAY);
+ }
+ 
+ void radio_Sendmsg()
+ {
+-    radio_state = RADIO_TX;
+-    ptt_state = PTT_RELEASE;
+-    SX1276_SendPacket(audio_buff, 18);
++	uint8_t queue_num = 0 ,index = 0;
++	uint8_t encode_audio[AUDIO_LEN];
++	int pre ,count = 0;
++
++    while(ptt_state == PTT_PRESS)
++    {
++    	if(AudioMsgSendQueue)
++    	{
++			queue_num = uxQueueSpacesAvailable(AudioMsgSendQueue);
++			if(queue_num <= FREE_QUEUE_LEN){
++				do{
++					if (pdFALSE == GetOneEncodedFrame(&encode_frame)){
++								taskYIELD();
++								continue;
++					} else {
++						log_error("SX1276_GetOneEncodedFrame ##### index %d  ---#####queue num %d \r\n",index ,queue_num);
++						memcpy(&encode_audio[(index++)*FRAME_LEN],encode_frame.ucValue,FRAME_LEN);
++					}
++				}while(index < PACK_NUM);
++				index = 0;
++
++				radio_state = RADIO_TX;
++			//	count++;
++			//	if (count > 5)
++				SX1276_SendPacket(encode_audio, AUDIO_LEN);
++				log_info("SX1276_SendPacket ##### time %d  ---#####queue num %d \r\n",xTaskGetTickCount() - pre ,queue_num);
++
++				pre = xTaskGetTickCount();
++			}
++    	}
++      //  taskYIELD();
++    }
+ }
+ 
+-
+-void radio_PttRelease()
++void radio_PttPress()
+ {
+-    PRINTF("radio_PttRelease %d.\r\n", radio_state);
+-
+-    xTimerStop(TxTimerHandle, 0);
+-/*
+-    if(radio_state == RADIO_TX) {
+-        radio_state = RADIO_IDLE;
+-        if (xTaskResumeFromISR(sx1276_tx_handler)) {
+-            taskYIELD();
+-        }
++	PRINTF("radio_PttPress %d.\r\n", radio_state);
++    //start get encoded data
++    radio_state = RADIO_TX;
++    PRINTF("start get one frame encode audio data\r\n");
++    radio_Sendmsg();
+ 
+-    }
+-*/
+ }
+ 
+-void TxTimerCallback(TimerHandle_t xTimer)
++void radio_PttRelease()
+ {
+-//    PRINTF("TxTimerCallback radio=%d,ppt=%d.\r\n", radio_state, ptt_state);
+-
+-
+-    if(RADIO_IDLE == radio_state && ptt_state == PTT_PRESS){
+-        SX1276_SendPacket(audio_buff, SEND_PACKAGE_LEN);
+-        radio_state = RADIO_TX;
+-/*
+-        PRINTF("SX1276_SendPacket  %x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x\r\n", 
+-        audio_buff[0],audio_buff[1],audio_buff[2],audio_buff[3],audio_buff[4],
+-        audio_buff[5],audio_buff[6],audio_buff[7],audio_buff[8],audio_buff[9],
+-        audio_buff[10],audio_buff[11],audio_buff[12],audio_buff[13],audio_buff[14],
+-        audio_buff[15],audio_buff[16],audio_buff[17]);
+-*/
+-
+-
+-//start encode  no interface
+-    PRINTF("start encode  no interface\r\n");
+-
+-
+-    } else {
+-        radio_state = RADIO_RX;
+-        PRINTF("TxTimerCallback radio_state error.\r\n");
+-        if (xTaskResumeFromISR(sx1276_tx_handler)) {
+-            taskYIELD();
+-        }
+-
+-    }
+-
++    PRINTF("radio_PttRelease %d.\r\n", radio_state);
++    if(radio_state == RADIO_TX)
++    radio_state = RADIO_IDLE;
+ }
+ 
+-
+-
+ void RF_Initial()
+ {
+     SX1276_Init(1);            //SX127X module reset and initialize to LoRa mode
+@@ -100,74 +102,84 @@ void RF_Initial()
+     SX1276_SetRxMode();             // receiver mode
+     SX1276_WriteReg(0x24, 0);
+     radio_state = RADIO_RX;
+-}
+-
+-void Timer_Initial()
+-{
+-    TxTimerHandle = xTimerCreate("SwTimer", /* Text name. */
+-    TX_TIMER_PERIOD_MS, /* Timer period. */
+-    pdTRUE, /* Enable auto reload. */
+-    0, /* ID is not used. */
+-    TxTimerCallback); /* The callback function. */
++    PRINTF("sx1278 RF_Initial\n");
+ }
+ 
+ void RF_RecvHandler(void)
+ {
+     uint8_t length = 0;
++    length = SX1276_ReceivePacket(receive_frame.ucValue);
++
++#if LOG_ENABLE
++    uint8_t i;
++	PRINTF("rcv package lenght  %d :\n", length);
++	for(i = 0 ; i < AUDIO_LEN; i++ )
++	{
++		PRINTF("0x%x  ",receive_frame.ucValue[i]);
++	}
++	PRINTF("\n");
++#endif
+ 
+-    memset(audio_buff, 0, SEND_PACKAGE_LEN);
+-    length = SX1276_ReceivePacket(audio_buff);
+-
+-//	PRINTF("rcv package len = %d\r\n", length);
+ /*
+     PRINTF("rcv package = %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x, len =%d\r\n", 
+     audio_buff[0],audio_buff[1],audio_buff[2],audio_buff[3],audio_buff[4],audio_buff[5],audio_buff[6],
+     audio_buff[7],audio_buff[8],audio_buff[9],audio_buff[10],audio_buff[11],audio_buff[12],audio_buff[13],
+     audio_buff[14],audio_buff[15],audio_buff[16],audio_buff[17], length);
+ */    
+-
+     SX1276_SetRxMode();
+     radio_state = RADIO_RX;
+-    if(length == 18) {
+-        //start decode  no interface
+-        
+-        PRINTF("start decode  no interface\r\n");
+-
+-    }
++	PRINTF(" len = %d ,count = %d\r\n", length,receive_frame.ucValue[18]);
+ }
+ 
+-void radio_main(void *handle)
++void radio_rx_main(void *handle)
+ {
++	int t1;
+     RF_Initial();
+-
+     while (1) {
+ 		vTaskSuspend(NULL);
++	//	t1 = xTaskGetTickCount();
++	//	PRINTF("radio_rx_main\n");
+         RF_RecvHandler();
++        /*
++        if (pdFALSE == PutThreeEncodedFrame(&receive_frame)){
++					taskYIELD();
++					continue;
++		}*/
++	//	PRINTF("radio_rx_main t=%d\n", xTaskGetTickCount() - t1);
+     }
+ }
+ 
+-void radio_tx_main(void *handle)
++void message_handle_main(void *handle)
+ {
+-    Timer_Initial();
++	while (1) {
++		PRINTF("task message_handle_main\n");
++		vTaskSuspend(NULL);
++		if (pdFALSE == PutThreeEncodedFrame(&receive_frame)){
++					taskYIELD();
++					continue;
++		}
++		PRINTF("task PutThreeEncodedFrame 1111\n");
++	}
+ 
++}
++
++void radio_tx_main(void *handle)
++{
+     while (1) {
+         vTaskSuspend(NULL);
+-
+-//        PRINTF("radio_tx_main radio_state =%d,ptt=%d\r\n", radio_state, ptt_state);
+-
+         if (radio_state == RADIO_TX_DONE) {
+             radio_state = RADIO_IDLE;
+             SX1276_LoRa_SendDone();
+         }
+ 
+-        if (ptt_state == PTT_RELEASE || radio_state == RADIO_RX) {
++        if (ptt_state != PTT_PRESS || radio_state == RADIO_RX) {
+             PRINTF("radio_tx_main SX1276_SetRxMode\r\n");
+-            xTimerStop(TxTimerHandle, 0);
+             radio_state = RADIO_RX;
+             SX1276_SetRxMode();
+         }
+     }
+ }
+ 
+-ADD_TASK_WORK(&sx1276_task_handler, radio_main, "radio_main", 1024, NULL, TASK_AUDIO_PRIORITY);
++ADD_TASK_WORK(&sx1276_task_handler, radio_rx_main, "radio_rx", 1024, NULL, TASK_AUDIO_PRIORITY);
+ ADD_TASK_WORK(&sx1276_tx_handler, radio_tx_main, "radio_tx", 1024, NULL, TASK_AUDIO_PRIORITY);
++//ADD_TASK_WORK(&message_queue_handler, message_handle_main, "message_handle", 1024, NULL, TASK_AUDIO_PRIORITY);
+diff --git a/radio/sx1276-lora.c b/radio/sx1276-lora.c
+index 10886f9..9e57a98 100644
+--- a/radio/sx1276-lora.c
++++ b/radio/sx1276-lora.c
+@@ -458,9 +458,9 @@ USART_Send(INT8U *x, INT8U y);
+ INT8U SX1276_LoRa_RxProcess(void)
+ {
+     INT8U result = 2;
+-    if ( SX1276_READ_DIO2( )) {
+-        SX1276_WriteReg( REG_LR_IRQFLAGS, RFLR_IRQFLAGS_FHSSCHANGEDCHANNEL);
+-    }
++//    if ( SX1276_READ_DIO2( )) {
++//        SX1276_WriteReg( REG_LR_IRQFLAGS, RFLR_IRQFLAGS_FHSSCHANGEDCHANNEL);
++//    }
+ //	if( SX1276_READ_DIO0( ) )
+ //	{
+     SX1276_WriteReg( REG_LR_IRQFLAGS, RFLR_IRQFLAGS_RXDONE);
+diff --git a/source/FreeRTOSConfig.h b/source/FreeRTOSConfig.h
+index 400c458..6c010ab 100644
+--- a/source/FreeRTOSConfig.h
++++ b/source/FreeRTOSConfig.h
+@@ -71,7 +71,7 @@
+ /* Memory allocation related definitions. */
+ #define configSUPPORT_STATIC_ALLOCATION 0
+ #define configSUPPORT_DYNAMIC_ALLOCATION 1
+-#define configTOTAL_HEAP_SIZE ((size_t)(60 * 1024))
++#define configTOTAL_HEAP_SIZE ((size_t)(96 * 1024))
+ #define configAPPLICATION_ALLOCATED_HEAP 0
+ 
+ /* Hook function related definitions. */
+diff --git a/source/common.h b/source/common.h
+index 25841e9..a4556d7 100644
+--- a/source/common.h
++++ b/source/common.h
+@@ -27,6 +27,19 @@ extern "C" {
+ #define TASK_GUI_PRIORITY   (configMAX_PRIORITIES-1)
+ #define MODULE_DESC_LEN   (16)
+ 
++#define FRAME_LEN 6
++#define FREE_QUEUE_LEN 5
++#define AUDIO_LEN 18
++#define PACK_NUM 3
++
++typedef struct _Encodec_t{
++	uint8_t ucValue[6];
++}Encodec_t;
++
++typedef struct _Decodec_t{
++	uint8_t ucValue[18+1];
++}Decodec_t;
++
+ typedef struct _TaskWork {
+ 	TaskHandle_t *handle;
+ 	TaskFunction_t pxTaskCode;
+diff --git a/source/i2s_transfer.c b/source/i2s_transfer.c
+index 509b04b..286afd3 100644
+--- a/source/i2s_transfer.c
++++ b/source/i2s_transfer.c
+@@ -23,6 +23,7 @@
+ #include "fsl_dmic.h"
+ #include "fsl_dmic_dma.h"
+ #include "common.h"
++#include "sx1276.h"
+ 
+ #include "pin_mux.h"
+ #include <stdbool.h>
+@@ -48,6 +49,8 @@
+ #define BUFFER_SIZE (320)
+ #define BUFFER_NUM (2U)
+ 
++#define LOG_ENABLE 0
++
+ #define I2S_CLOCK_DIVIDER                                                 \
+     (CLOCK_GetAudioPllOutFreq() / DEMO_AUDIO_SAMPLE_RATE / 16U /                          \
+      2U) /* I2S source clock 24.576MHZ, sample rate 48KHZ, bits width 16, \
+@@ -93,6 +96,9 @@ static dma_handle_t s_i2sTxDmaHandle;
+ static i2s_dma_handle_t s_i2sTxHandle;
+ SDK_ALIGN(dma_descriptor_t s_dmaDescriptorPingpong[2], 16);
+ 
++extern radio_s radio_state;
++extern ppt_state_s ptt_state;
++
+ static dmic_transfer_t s_receiveXfer[2U] = {
+ /* transfer configurations for channel0 */
+ {
+@@ -121,7 +127,7 @@ codec_handle_t *codecHandle = (codec_handle_t *) codecHandleBuffer;
+ void dmic_Callback(DMIC_Type *base, dmic_dma_handle_t *handle, status_t status,
+ 		void *userData) {
+ 	static int pre = 0;
+-	log_debug("%s: %d:%d\r\n", __func__, s_emptyBlock, xTaskGetTickCount()-pre);
++//	log_info("%s: %d:%d\r\n", __func__, s_emptyBlock, xTaskGetTickCount()-pre);
+ 	pre = xTaskGetTickCount();
+ 	if (s_emptyBlock) {
+ 		s_emptyBlock--;
+@@ -135,35 +141,35 @@ void i2s_Callback(I2S_Type *base, i2s_dma_handle_t *handle,
+ 	log_info("%s: %d:%d\r\n", __func__, s_emptyBlock, xTaskGetTickCount()-pre);
+ 	pre = xTaskGetTickCount();
+ 	if (s_emptyBlock < BUFFER_NUM) {
+-		s_emptyBlock++;
++//		s_emptyBlock++;
+ 	}
+ }
+ 
+ /*!
+  * @brief Main function
+  */
+-static struct codec2 *C2Handle;
+-static QueueHandle_t AudioMsgQueue;
+-typedef struct _Encodec_t{
+-	uint8_t ucValue[6];
+-}Encodec_t;
++struct codec2 *C2Handle;
++QueueHandle_t AudioMsgSendQueue;
++QueueHandle_t AudioMsgRecvQueue;
++
+ BaseType_t SendOneFrame(Encodec_t data)
+ {
+-	if (NULL == AudioMsgQueue){
+-		AudioMsgQueue = xQueueCreate(8, sizeof( Encodec_t ));
++	if (NULL == AudioMsgSendQueue){
++		AudioMsgSendQueue = xQueueCreate(8, sizeof( Encodec_t ));
+ 	}
+-	return  xQueueSend(AudioMsgQueue, &data, 0);
++	return  xQueueSend(AudioMsgSendQueue, &data, 0);
+ }
+-BaseType_t GetOneFrame(Encodec_t *data){
+-	if (NULL == AudioMsgQueue){
+-		AudioMsgQueue = xQueueCreate(8, sizeof( Encodec_t ));
++
++BaseType_t GetThreeFrame(Decodec_t *data){
++	if (NULL == AudioMsgRecvQueue){
++		AudioMsgRecvQueue = xQueueCreate(8, sizeof( Decodec_t ));
+ 	}
+-	return xQueueReceive(AudioMsgQueue, data, portMAX_DELAY);
++	return xQueueReceive(AudioMsgRecvQueue, data, portMAX_DELAY);
+ }
+-void audio_main_test(void *handle) {
++void audio_main_capture(void *handle) {
+ 	dmic_channel_config_t dmic_channel_cfg;
+ 	i2s_transfer_t i2sTxTransfer;
+-    C2Handle =codec2_create(CODEC2_MODE_2400);
++    C2Handle = codec2_create(CODEC2_MODE_2400);
+ 
+ 	/* Board pin, clock, debug console init */
+ 	pll_config_t audio_pll_config = {
+@@ -221,7 +227,7 @@ void audio_main_test(void *handle) {
+ 	/* Adjust it to your needs, 0x0006 for -51 dB, 0x0039 for 0 dB etc. */
+ 	CODEC_SetVolume(codecHandle,
+ 			kCODEC_PlayChannelHeadphoneLeft | kCODEC_PlayChannelHeadphoneRight,
+-			0x0026);
++			0x0032);
+ 
+ 	DMA_Init(DEMO_DMA);
+ 
+@@ -286,54 +292,100 @@ void audio_main_test(void *handle) {
+ 	while (1) {
+ 		uint32_t volatile s_pemptyBlock = BUFFER_NUM;
+ 		Encodec_t codec;
+-		//taskYIELD();
++
+         int tick1,tick2;
+-		if (s_emptyBlock != s_pemptyBlock) {
++        static int pre = 0;
++    
++     if (ptt_state == PTT_PRESS) {
++
++ 		if (s_emptyBlock < BUFFER_NUM ) {
+             tick1 = xTaskGetTickCount();
++
++   /*         if(s_emptyBlock == 0)
++			{
++				s_emptyBlock == BUFFER_NUM;
++				s_pemptyBlock == BUFFER_NUM;
++			} */
++
+ 			i2sTxTransfer.data = s_buffer + s_writeIndex * BUFFER_SIZE;
+ 			i2sTxTransfer.dataSize = BUFFER_SIZE;
+             codec2_encode(C2Handle,&codec, i2sTxTransfer.data);
+             SendOneFrame(codec);
+-            s_pemptyBlock = s_emptyBlock;
+-            //sendmessage
+-//            memset(i2sTxTransfer.data, 0, BUFFER_SIZE);
+-//			codec2_decode(C2Handle, i2sTxTransfer.data, gEncode);
+-//
+-//			if (I2S_TxTransferSendDMA(DEMO_I2S_TX, &s_i2sTxHandle,
+-//					i2sTxTransfer) == kStatus_Success) {
+-//				if (++s_writeIndex >= BUFFER_NUM) {
+-//					s_writeIndex = 0U;
+-//				}
+-//			}
+-//			tick2 = xTaskGetTickCount();
+-//			vTaskDelay(20 - (tick2 - tick1));
+-//			tick2 = xTaskGetTickCount();
+-			log_info("%s:xxxxxxxxxxxxxxxxxxxxxxx%d:%d:%d\r\n", __func__, tick1,tick2, tick2 - tick1);
++
++            if (s_emptyBlock < BUFFER_NUM)
++            	s_emptyBlock++;
++
++        	if (++s_writeIndex >= BUFFER_NUM) {
++        		s_writeIndex = 0U;
++        	}
++
++			tick2 = xTaskGetTickCount();
++
++//			if((xTaskGetTickCount() - pre) < 20)
++//			 vTaskDelay(20 - (xTaskGetTickCount() - pre));
++
++			log_info("Send One capture Frame ##### time %d s_emptyBlock %d  tick1 = %d tick2 = %d  tick2 -tick1 = %d\r\n",xTaskGetTickCount() - pre,s_emptyBlock ,tick1 , tick2 ,tick2-tick1);
++
++			pre = xTaskGetTickCount();
+ 		}
++      }
++     vTaskDelay(3);
+ 	}
+ }
+-void audio_main_tx(void *handle) {
++
++void audio_main_playback(void *handle) {
+ 	uint8_t buffer[BUFFER_SIZE];
+-	Encodec_t codec;
++	Decodec_t codec;
++	uint8_t frame[FRAME_LEN];
++	uint8_t index = 0;
+ 	i2s_transfer_t i2sTxTransfer ={
+            .data = buffer,
+ 		   .dataSize = BUFFER_SIZE,
+ 	};
++
+ 	while (1) {
+ 
+-		if (pdFALSE == GetOneFrame(&codec)){
+-			taskYIELD();
+-			continue;
+-		}
+-		codec2_decode(C2Handle, i2sTxTransfer.data, codec.ucValue);
+-		if (I2S_TxTransferSendDMA(DEMO_I2S_TX, &s_i2sTxHandle, i2sTxTransfer)
+-				== kStatus_Success) {
+-			if (++s_writeIndex >= BUFFER_NUM) {
+-				s_writeIndex = 0U;
++	   if (radio_state != RADIO_TX) {
++		   int tick1,tick2,tick3 ,tick4;
++		   tick1 = xTaskGetTickCount();
++			if (pdFALSE == GetThreeFrame(&codec)){
++				taskYIELD();
++				continue;
++			} else {
++
++				do{
++					tick2 = xTaskGetTickCount();
++					memcpy(frame,&codec.ucValue[(index++)*FRAME_LEN],FRAME_LEN);
++#if LOG_ENABLE
++					uint8_t i;
++					PRINTF("play back index %d :\n", index);
++					for(i = 0 ; i < FRAME_LEN; i++ )
++					{
++						PRINTF("0x%x  ",frame[i]);
++					}
++
++					PRINTF("\n");
++#endif
++
++					codec2_decode(C2Handle, i2sTxTransfer.data, frame);
++					if (I2S_TxTransferSendDMA(DEMO_I2S_TX, &s_i2sTxHandle, i2sTxTransfer)
++							== kStatus_Success) {
++			/*			if (++s_writeIndex >= BUFFER_NUM) {
++							s_writeIndex = 0U;
++						} */
++						//PRINTF("play back receive data ,index %d ,frame[0] 0x%x frame[1] 0x%x frame[2] 0x%x frame[3] 0x%x  \n", index,frame[0],frame[1],frame[2],frame[3]);
++					}
++					tick3 = xTaskGetTickCount();
++		//			vTaskDelay(20 - (tick3 - tick2));
++				} while (index < PACK_NUM);
++				index = 0;
+ 			}
+-		}
++			tick4 = xTaskGetTickCount();
++			//vTaskDelay(60 - (tick4 - tick1));
++	   }
+ 		log_info("%s:xxxxxxxxxxxxxxxxxxxxxxx%d:%d:%d\r\n", __func__);
+ 	}
+ }
+-ADD_TASK_WORK(NULL, audio_main_test, "audio_main_rx", 2000, NULL, TASK_AUDIO_PRIORITY);
+-ADD_TASK_WORK(NULL, audio_main_tx, "audio_main_tx", 5000, NULL, TASK_AUDIO_PRIORITY);
++
++ADD_TASK_WORK(NULL, audio_main_capture, "audio_main_capture", 2000, NULL, TASK_AUDIO_PRIORITY);
++//ADD_TASK_WORK(NULL, audio_main_playback, "audio_main_playback", 5000, NULL, TASK_AUDIO_PRIORITY);
+diff --git a/source/main.c b/source/main.c
+index c76f37c..b1aeaf4 100644
+--- a/source/main.c
++++ b/source/main.c
+@@ -48,7 +48,7 @@
+ 
+ extern TaskHandle_t sx1276_task_handler;
+ extern TaskHandle_t sx1276_tx_handler;
+-
++extern void radio_PttPress();
+ 
+ TaskHandle_t ptt_handler;
+ 
+@@ -76,29 +76,28 @@ void audio_main3(void *handle)
+ void ptt_main(void *handle)
+ {
+     while (1) {
+-        vTaskSuspend(NULL);
+ 
+         if (GPIO_PinRead(GPIO, 1, 1)) {
+             if (ptt_state == PTT_PRESS) {
+                 ptt_state = PTT_RELEASE;
+-                PRINTF("PTT release\r\n");		//PTT release
+-                radio_PttRelease();
++              //  PRINTF("PTT release\r\n");		//PTT release
++              //  radio_PttRelease();
++                taskYIELD();
+             }
+         }
+         else {
+             if (ptt_state == PTT_RELEASE) {
+                 ptt_state = PTT_PRESS;
+-                PRINTF("PTT press\r\n");
++              //  PRINTF("PTT press\r\n");
+                 radio_PttPress();				//PTT press
+-//                radio_Sendmsg();
+             }
+         }
+-
++        vTaskDelay(1);
+     }
+ }
+ 
+ //ADD_TASK_WORK(NULL, audio_main3,"audio_test3", configMINIMAL_STACK_SIZE, NULL, TASK_AUDIO_PRIORITY);
+-ADD_TASK_WORK(&ptt_handler, ptt_main, "ptt_main", 512, NULL, TASK_AUDIO_PRIORITY);
++ADD_TASK_WORK(&ptt_handler, ptt_main, "ptt_main", 1024, NULL, TASK_AUDIO_PRIORITY);
+ 
+ void CreateTasks(void)
+ {
+@@ -215,17 +214,20 @@ status_t Sx127x_Spi_Ctrl_Init(void)
+ 
+ void pint_intr_callback(pint_pin_int_t pintr, uint32_t pmatch_status)
+ {
+-//    PRINTF("kPINT_PinIntEnableFallEdge%d, pmatch_status %d\r\n", pintr, pmatch_status);
+-	if(xTaskResumeFromISR(ptt_handler)){
+-         taskYIELD();
+-     }
+- 
++   // PRINTF("kPINT_PinIntEnableFallEdge%d, ptt_state %d\r\n", pintr, ptt_state);
++    ptt_state ^=  ptt_state;
++    if (ptt_state == PTT_RELEASE) {
++	   PRINTF("PTT release\r\n");		//PTT release
++	   radio_PttRelease();
++    } else if (ptt_state == PTT_PRESS) {
++    	PRINTF("PTT Press\r\n");
++    }
+ }
+ 
+ void dio0_intr_callback(pint_pin_int_t pintr, uint32_t pmatch_status)
+ {
+ 
+-//    PRINTF("dio0_intr_callback radio_state=%d\r\n", radio_state);
++//    PRINTF("dio0_intr_callback radio_state=%d tick %d\r\n", radio_state ,xTaskGetTickCountFromISR());
+ 
+ 
+     if (RADIO_TX == radio_state) {
+@@ -242,11 +244,6 @@ void dio0_intr_callback(pint_pin_int_t pintr, uint32_t pmatch_status)
+ 
+ }
+ 
+-void dio2_intr_callback(pint_pin_int_t pintr, uint32_t pmatch_status)
+-{
+-    PRINTF("dio2_intr_callback%d, %d\r\n", pintr, pmatch_status);
+-}
+-
+ void init_gpio_int()
+ {
+     INPUTMUX_Init(INPUTMUX);
+@@ -260,8 +257,8 @@ void init_gpio_int()
+ 	PINT_PinInterruptConfig(PINT, kPINT_PinInt0, kPINT_PinIntEnableBothEdges, pint_intr_callback);
+     PINT_PinInterruptConfig(PINT, kPINT_PinInt1, kPINT_PinIntEnableRiseEdge, dio0_intr_callback);
+ 
+-	NVIC_SetPriority(PIN_INT0_IRQn, 4);
+-    NVIC_SetPriority(PIN_INT1_IRQn, 4);
++	NVIC_SetPriority(PIN_INT0_IRQn, 3);
++    NVIC_SetPriority(PIN_INT1_IRQn, 3);
+ 
+ 	PINT_EnableCallbackByIndex(PINT, kPINT_PinInt0);
+     PINT_EnableCallbackByIndex(PINT, kPINT_PinInt1);
+-- 
+2.7.4
+

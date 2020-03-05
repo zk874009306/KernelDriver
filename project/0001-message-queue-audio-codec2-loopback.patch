@@ -1,0 +1,130 @@
+From 98aaf651f993db92133670d9b339cec924d3e91d Mon Sep 17 00:00:00 2001
+From: zhangkang <zhangkang@datang.com>
+Date: Tue, 10 Dec 2019 16:42:07 +0800
+Subject: [PATCH] message queue audio codec2 loopback
+
+---
+ source/i2s_transfer.c | 84 +++++++++++++++++++++++++++++++++++++++------------
+ 1 file changed, 64 insertions(+), 20 deletions(-)
+
+diff --git a/source/i2s_transfer.c b/source/i2s_transfer.c
+index b8157e5..509b04b 100644
+--- a/source/i2s_transfer.c
++++ b/source/i2s_transfer.c
+@@ -132,7 +132,7 @@ unsigned char gEncode[48];
+ void i2s_Callback(I2S_Type *base, i2s_dma_handle_t *handle,
+ 		status_t completionStatus, void *userData) {
+ 	static int pre = 0;
+-	log_debug("%s: %d:%d\r\n", __func__, s_emptyBlock, xTaskGetTickCount()-pre);
++	log_info("%s: %d:%d\r\n", __func__, s_emptyBlock, xTaskGetTickCount()-pre);
+ 	pre = xTaskGetTickCount();
+ 	if (s_emptyBlock < BUFFER_NUM) {
+ 		s_emptyBlock++;
+@@ -142,11 +142,28 @@ void i2s_Callback(I2S_Type *base, i2s_dma_handle_t *handle,
+ /*!
+  * @brief Main function
+  */
+-
++static struct codec2 *C2Handle;
++static QueueHandle_t AudioMsgQueue;
++typedef struct _Encodec_t{
++	uint8_t ucValue[6];
++}Encodec_t;
++BaseType_t SendOneFrame(Encodec_t data)
++{
++	if (NULL == AudioMsgQueue){
++		AudioMsgQueue = xQueueCreate(8, sizeof( Encodec_t ));
++	}
++	return  xQueueSend(AudioMsgQueue, &data, 0);
++}
++BaseType_t GetOneFrame(Encodec_t *data){
++	if (NULL == AudioMsgQueue){
++		AudioMsgQueue = xQueueCreate(8, sizeof( Encodec_t ));
++	}
++	return xQueueReceive(AudioMsgQueue, data, portMAX_DELAY);
++}
+ void audio_main_test(void *handle) {
+ 	dmic_channel_config_t dmic_channel_cfg;
+ 	i2s_transfer_t i2sTxTransfer;
+-    struct codec2 *C2Handle =codec2_create(CODEC2_MODE_2400);
++    C2Handle =codec2_create(CODEC2_MODE_2400);
+ 
+ 	/* Board pin, clock, debug console init */
+ 	pll_config_t audio_pll_config = {
+@@ -267,29 +284,56 @@ void audio_main_test(void *handle) {
+ 			DEMO_DMIC_CHANNEL);
+ 
+ 	while (1) {
+-
++		uint32_t volatile s_pemptyBlock = BUFFER_NUM;
++		Encodec_t codec;
+ 		//taskYIELD();
+         int tick1,tick2;
+-		if (s_emptyBlock < BUFFER_NUM) {
++		if (s_emptyBlock != s_pemptyBlock) {
+             tick1 = xTaskGetTickCount();
+ 			i2sTxTransfer.data = s_buffer + s_writeIndex * BUFFER_SIZE;
+ 			i2sTxTransfer.dataSize = BUFFER_SIZE;
+-            codec2_encode(C2Handle,gEncode, i2sTxTransfer.data);
+-            memset(i2sTxTransfer.data, 0, BUFFER_SIZE);
+-			codec2_decode(C2Handle, i2sTxTransfer.data, gEncode);
+-
+-			if (I2S_TxTransferSendDMA(DEMO_I2S_TX, &s_i2sTxHandle,
+-					i2sTxTransfer) == kStatus_Success) {
+-				if (++s_writeIndex >= BUFFER_NUM) {
+-					s_writeIndex = 0U;
+-				}
+-			}
+-			tick2 = xTaskGetTickCount();
+-			vTaskDelay(20 - (tick2 - tick1));
+-			tick2 = xTaskGetTickCount();
+-			log_debug("%s:xxxxxxxxxxxxxxxxxxxxxxx%d:%d:%d\r\n", __func__, tick1,tick2, tick2 - tick1);
++            codec2_encode(C2Handle,&codec, i2sTxTransfer.data);
++            SendOneFrame(codec);
++            s_pemptyBlock = s_emptyBlock;
++            //sendmessage
++//            memset(i2sTxTransfer.data, 0, BUFFER_SIZE);
++//			codec2_decode(C2Handle, i2sTxTransfer.data, gEncode);
++//
++//			if (I2S_TxTransferSendDMA(DEMO_I2S_TX, &s_i2sTxHandle,
++//					i2sTxTransfer) == kStatus_Success) {
++//				if (++s_writeIndex >= BUFFER_NUM) {
++//					s_writeIndex = 0U;
++//				}
++//			}
++//			tick2 = xTaskGetTickCount();
++//			vTaskDelay(20 - (tick2 - tick1));
++//			tick2 = xTaskGetTickCount();
++			log_info("%s:xxxxxxxxxxxxxxxxxxxxxxx%d:%d:%d\r\n", __func__, tick1,tick2, tick2 - tick1);
+ 		}
+ 	}
+ }
++void audio_main_tx(void *handle) {
++	uint8_t buffer[BUFFER_SIZE];
++	Encodec_t codec;
++	i2s_transfer_t i2sTxTransfer ={
++           .data = buffer,
++		   .dataSize = BUFFER_SIZE,
++	};
++	while (1) {
+ 
+-//ADD_TASK_WORK(NULL, audio_main_test, "audio_main_test", 5000, NULL, TASK_AUDIO_PRIORITY);
++		if (pdFALSE == GetOneFrame(&codec)){
++			taskYIELD();
++			continue;
++		}
++		codec2_decode(C2Handle, i2sTxTransfer.data, codec.ucValue);
++		if (I2S_TxTransferSendDMA(DEMO_I2S_TX, &s_i2sTxHandle, i2sTxTransfer)
++				== kStatus_Success) {
++			if (++s_writeIndex >= BUFFER_NUM) {
++				s_writeIndex = 0U;
++			}
++		}
++		log_info("%s:xxxxxxxxxxxxxxxxxxxxxxx%d:%d:%d\r\n", __func__);
++	}
++}
++ADD_TASK_WORK(NULL, audio_main_test, "audio_main_rx", 2000, NULL, TASK_AUDIO_PRIORITY);
++ADD_TASK_WORK(NULL, audio_main_tx, "audio_main_tx", 5000, NULL, TASK_AUDIO_PRIORITY);
+-- 
+2.7.4
+

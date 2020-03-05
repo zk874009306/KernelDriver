@@ -1,0 +1,4 @@
+        __task_section_table = .;
+		KEEP(*(task_work_sec))
+		__task_section_table_end = .;
+		 *(.data*)
